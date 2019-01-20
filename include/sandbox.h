@@ -13,6 +13,10 @@
 #include "camera.h"
 #include "sb_math.h"
 
+
+#define STUPID_WIDTH  800
+#define STUPID_HEIGHT 600
+
 class sandbox
 {
 public:
@@ -38,7 +42,7 @@ public:
         glfwWindowHint( GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE ) ;
         glfwWindowHint( GLFW_RESIZABLE, GL_FALSE ) ;
 
-        window = glfwCreateWindow( 800, 600, name, nullptr, nullptr ) ;
+        window = glfwCreateWindow( STUPID_WIDTH, STUPID_HEIGHT, name, nullptr, nullptr ) ;
         if( window == nullptr )
         {
             throw std::runtime_error("Failed to create GLFW window!") ;

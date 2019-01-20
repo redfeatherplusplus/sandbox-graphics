@@ -2,6 +2,10 @@
 #include <GL/glew.h>
 #include "vulkan_processor.h"
 #include "lodepng.h"
+#include "sb_math.h"
+#include "sandbox.h"
+
+using namespace glm;
 
 std::vector<const char*> required_instance_extensions =
 {
@@ -62,7 +66,7 @@ GLuint PostProcessor::initGL(uint32_t width, uint32_t height, GLenum format)
     transition_command_buffer.begin(begin_info);
     transition_command_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
     transition_command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, pipeline_layout, 0, 1, &descriptor_set, 0, nullptr);
-    transition_command_buffer.dispatch((uint32_t)ceil(800/float(WORKGROUP_SIZE)), (uint32_t)ceil(600/float(WORKGROUP_SIZE)), 1);
+    transition_command_buffer.dispatch((uint32_t)ceil(STUPID_WIDTH/float(WORKGROUP_SIZE)), (uint32_t)ceil(STUPID_HEIGHT/float(WORKGROUP_SIZE)), 1);
     transition_command_buffer.end();
     return tex;
 }
@@ -213,7 +217,7 @@ void PostProcessor::executeCapture()
             vk::ImageCreateFlags(),
             vk::ImageType::e2D,
             vk::Format::eR8G8B8A8Unorm,
-            {800, 600, 1},
+            {STUPID_WIDTH, STUPID_HEIGHT, 1},
             1,
             1,
             vk::SampleCountFlagBits::e1,
@@ -518,8 +522,8 @@ void PostProcessor::saveGLImage(vk::DeviceMemory memory, uint64_t size)
     Pixel *pixels = (Pixel*)mapped_memory;
 
     std::vector<unsigned char> image_data;
-    image_data.reserve(800*600*4);
-    for(int i = 0; i < 800*600; i++)
+    image_data.reserve(STUPID_WIDTH*STUPID_HEIGHT*4);
+    for(int i = 0; i < STUPID_WIDTH*STUPID_HEIGHT; i++)
     {
         image_data.push_back((unsigned char)(pixels[i].r));
         image_data.push_back((unsigned char)(pixels[i].g));
@@ -528,7 +532,7 @@ void PostProcessor::saveGLImage(vk::DeviceMemory memory, uint64_t size)
     }
     device.unmapMemory(memory);
 
-    unsigned error = lodepng::encode("triangle.png", image_data, 800, 600);
+    unsigned error = lodepng::encode("triangle.png", image_data, STUPID_WIDTH, STUPID_HEIGHT);
     if( error)
     {
         char buffer[128];
@@ -600,7 +604,7 @@ void PostProcessor::copyImage(vk::Image src, vk::Image dst)
 
     if(supports_blit)
     {
-        vk::Offset3D blit_size(800, 600, 1);
+        vk::Offset3D blit_size(STUPID_WIDTH, STUPID_HEIGHT, 1);
         vk::ImageBlit blit_region;
         blit_region.srcSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
         blit_region.srcSubresource.layerCount = 1;
@@ -619,8 +623,8 @@ void PostProcessor::copyImage(vk::Image src, vk::Image dst)
         copy_region.srcSubresource.layerCount = 1;
         copy_region.dstSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
         copy_region.dstSubresource.layerCount = 1;
-        copy_region.extent.width = 800;
-        copy_region.extent.height = 600;
+        copy_region.extent.width = STUPID_WIDTH;
+        copy_region.extent.height = STUPID_HEIGHT;
         copy_region.extent.depth = 1;
 
         // Issue the copy command
