@@ -69,7 +69,7 @@ private:
 public:
     static void run(PostProcessor *pp);
 
-    void init();
+    void initVulkan();
     GLuint initGL(uint32_t width, uint32_t height, GLenum format);
 
     void glFinished();
@@ -79,30 +79,29 @@ public:
 
     void cleanup();
 private:
-    void initVulkan();
-    void initPipeline();
-    void initShared(uint32_t width, uint32_t height, vk::Format format);
 
-    void updateDescriptorSet();
+    // ****************************************************************************
+    // Vulkan Init
 
+    void createVulkanInstance();
+    void createVulkanDevice();
+    void findVulkanPhysicalDevice();
+
+    void createCommandBuffer();
+    void createDescriptorSetLayout();
+    void createDescriptorSet();
+    void createComputePipeline();
+    
+    // **************************************************************************   
+    // GL Init
+    
     void createSharedSemaphores(vk::DispatchLoaderDynamic dynamic_loader);
     void createSharedImage(vk::DispatchLoaderDynamic dynamic_loader, uint32_t width, uint32_t height, vk::Format format);
     void createSharedSampler();
     void createSharedImageView(vk::Format format);
 
-    void createInstance();
-    bool instanceExtensionsFound();
-
-    void findPhysicalDevice();
-    bool deviceExtensionsFound(vk::PhysicalDevice device);
-
-    void createDevice();
-
-    void createCommandBuffer();
-
-    void createDescriptorSetLayout();
-    void createDescriptorSet();
-    void createComputePipeline();
+    // ****************************************************************************
+    // Other stuff
 
     void saveGLImage(vk::DeviceMemory memory, uint64_t size);
 

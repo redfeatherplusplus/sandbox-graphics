@@ -67,7 +67,7 @@ class triangle : public sandbox
 
         try
         {
-            pp.init();
+            pp.initVulkan();
             tex = pp.initGL(width, height, GL_RGBA8);
         }
         catch(const std::runtime_error& e)

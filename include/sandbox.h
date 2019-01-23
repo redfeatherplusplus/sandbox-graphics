@@ -14,8 +14,8 @@
 #include "sb_math.h"
 
 
-#define STUPID_WIDTH  800
-#define STUPID_HEIGHT 600
+#define STUPID_WIDTH  480
+#define STUPID_HEIGHT 480
 
 class sandbox
 {

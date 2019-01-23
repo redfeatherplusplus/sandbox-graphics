@@ -22,16 +22,58 @@ std::vector<const char*> required_device_extensions =
     VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME
 };
 
-void PostProcessor::init()
+void PostProcessor::initVulkan()
 {
-    initVulkan();
-    initPipeline();
+    createVulkanInstance();
+    createVulkanDevice();
+
+    createCommandBuffer();
+    createDescriptorSetLayout();
+    createDescriptorSet();
+    createComputePipeline();
 }
 
 GLuint PostProcessor::initGL(uint32_t width, uint32_t height, GLenum format)
 {
-    initShared(width, height, glFormatToVk(format));
+    auto initShared = [&](){    
+        auto vk_format = glFormatToVk(format);
+        vk::DispatchLoaderDynamic dynamic_loader(instance, device);
 
+        createSharedSemaphores(dynamic_loader);
+        createSharedImage(dynamic_loader, width, height, vk_format);
+        createSharedSampler();
+        createSharedImageView(vk_format);
+
+        // Create Image View
+        vk::ImageViewCreateInfo view_create_info(
+                vk::ImageViewCreateFlags(),
+                shared_image,
+                vk::ImageViewType::e2D,
+                vk_format,
+                vk::ComponentMapping(),
+                {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
+        shared_view = device.createImageView(view_create_info);
+    };
+    initShared();
+
+    // Self-note: You cannot modify a descriptor set unless you know the GPU is done w/ resource.
+    // See: https://forums.khronos.org/showthread.php/13417-What-does-vkUpdateDescriptorSets-exactly-do
+    auto updateDescriptorSet = [&](){
+        vk::DescriptorImageInfo descriptor_image_info(
+                shared_sampler,
+                shared_view,
+                vk::ImageLayout::eGeneral);
+
+        vk::WriteDescriptorSet write_descriptor_set(
+                descriptor_set,
+                0,
+                0,
+                1,
+                vk::DescriptorType::eStorageImage,
+                &descriptor_image_info);
+
+        device.updateDescriptorSets(write_descriptor_set, nullptr);
+    };
     updateDescriptorSet();
 
     if(glewInit() != GLEW_OK)
@@ -39,6 +81,7 @@ GLuint PostProcessor::initGL(uint32_t width, uint32_t height, GLenum format)
         throw std::runtime_error("Failed to initialize GLEW");
     }
 
+    // What if this was externally supplied?
     glGenSemaphoresEXT(1, &gl_finished);
     glGenSemaphoresEXT(1, &vk_finished);
 
@@ -55,58 +98,28 @@ GLuint PostProcessor::initGL(uint32_t width, uint32_t height, GLenum format)
 
     gltex = tex;
 
-    // Setup the command buffers used to transition the image between GL and VK
-    vk::CommandBufferAllocateInfo allocate_info(
-            command_pool,
-            vk::CommandBufferLevel::ePrimary,
-            1);
-    transition_command_buffer = device.allocateCommandBuffers(allocate_info)[0];
-    vk::CommandBufferBeginInfo begin_info(
-            vk::CommandBufferUsageFlagBits{});
-    transition_command_buffer.begin(begin_info);
-    transition_command_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
-    transition_command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, pipeline_layout, 0, 1, &descriptor_set, 0, nullptr);
-    transition_command_buffer.dispatch((uint32_t)ceil(STUPID_WIDTH/float(WORKGROUP_SIZE)), (uint32_t)ceil(STUPID_HEIGHT/float(WORKGROUP_SIZE)), 1);
-    transition_command_buffer.end();
+    // If I don't execute this I get a fully red triangle and some runtime errors.
+    auto setup_transition_command_buffer = [&](){
+        vk::CommandBufferAllocateInfo allocate_info(
+                command_pool,
+                vk::CommandBufferLevel::ePrimary,
+                1);
+        transition_command_buffer = device.allocateCommandBuffers(allocate_info)[0];
+        vk::CommandBufferBeginInfo begin_info(
+                vk::CommandBufferUsageFlagBits{});
+                
+        transition_command_buffer.begin(begin_info);
+        transition_command_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
+        transition_command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, 
+                                                     pipeline_layout, 
+                                                     0, 1, &descriptor_set, 0, nullptr);
+        transition_command_buffer.dispatch((uint32_t)ceil(STUPID_WIDTH/float(WORKGROUP_SIZE)), 
+                                           (uint32_t)ceil(STUPID_HEIGHT/float(WORKGROUP_SIZE)), 1);
+        transition_command_buffer.end();
+    };
+    setup_transition_command_buffer();
+
     return tex;
-}
-
-void PostProcessor::initShared(uint32_t width, uint32_t height, vk::Format format)
-{
-    vk::DispatchLoaderDynamic dynamic_loader(instance, device);
-
-    createSharedSemaphores(dynamic_loader);
-    createSharedImage(dynamic_loader, width, height, format);
-    createSharedSampler();
-    createSharedImageView(format);
-
-    // Create Image View
-    vk::ImageViewCreateInfo view_create_info(
-            vk::ImageViewCreateFlags(),
-            shared_image,
-            vk::ImageViewType::e2D,
-            format,
-            vk::ComponentMapping(),
-            {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
-    shared_view = device.createImageView(view_create_info);
-}
-
-void PostProcessor::updateDescriptorSet()
-{
-    vk::DescriptorImageInfo descriptor_image_info(
-            shared_sampler,
-            shared_view,
-            vk::ImageLayout::eGeneral);
-
-    vk::WriteDescriptorSet write_descriptor_set(
-            descriptor_set,
-            0,
-            0,
-            1,
-            vk::DescriptorType::eStorageImage,
-            &descriptor_image_info);
-
-    device.updateDescriptorSets(write_descriptor_set, nullptr);
 }
 
 void PostProcessor::createSharedSemaphores(vk::DispatchLoaderDynamic dynamic_loader)
@@ -213,6 +226,13 @@ void PostProcessor::execute()
 
 void PostProcessor::executeCapture()
 {
+    // vk::BufferCreateInfo bufferInfo = {};
+    // bufferInfo.size = size;
+    // bufferInfo.usage = usage;
+    // bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    //vk::Buffer staging_buffer();
+
     vk::ImageCreateInfo image_create_info(
             vk::ImageCreateFlags(),
             vk::ImageType::e2D,
@@ -241,22 +261,7 @@ void PostProcessor::executeCapture()
     device.destroyImage(staging_image);
 }
 
-void PostProcessor::initVulkan()
-{
-    createInstance();
-    findPhysicalDevice();
-    createDevice();
-    createCommandBuffer();
-}
-
-void PostProcessor::initPipeline()
-{
-    createDescriptorSetLayout();
-    createDescriptorSet();
-    createComputePipeline();
-}
-
-void PostProcessor::createInstance()
+void PostProcessor::createVulkanInstance()
 {
     // Enable Validation Layers
     std::vector<const char*> enabled_layers;
@@ -279,8 +284,29 @@ void PostProcessor::createInstance()
     }
     enabled_layers.push_back("VK_LAYER_LUNARG_standard_validation");
 
-    // Enabled Extensions
-    if(!instanceExtensionsFound())
+
+    auto allInstanceExtensionsFound = [&](){
+        auto instance_extension_properties = vk::enumerateInstanceExtensionProperties();
+        auto instanceExtensionFound = [&](const auto& extension){
+            for(const auto& prop : instance_extension_properties)
+            {
+                if(strcmp(prop.extensionName, extension) == 0)
+                    return true;
+            }
+
+            return false;
+        };
+
+        for(const auto& extension : required_instance_extensions)
+        {
+            if (!instanceExtensionFound(extension))
+                return false;
+        }
+
+        return true;
+    };
+
+    if(!allInstanceExtensionsFound())
     {
         throw std::runtime_error("Could not find all instance extensions");
     }
@@ -301,32 +327,7 @@ void PostProcessor::createInstance()
     instance = vk::createInstance(create_info);
 }
 
-bool PostProcessor::instanceExtensionsFound()
-{
-    std::vector<vk::ExtensionProperties> extension_properties = vk::enumerateInstanceExtensionProperties();
-
-    bool found_all = true;
-    for(auto extension : required_instance_extensions)
-    {
-        bool found = true;
-        for(auto prop : extension_properties)
-        {
-            if(strcmp(prop.extensionName, extension) == 0)
-            {
-                found = true;
-                break;
-            }
-        }
-        if(!found)
-        {
-            found_all = false;
-            break;
-        }
-    }
-    return found_all;
-}
-
-void PostProcessor::findPhysicalDevice()
+void PostProcessor::findVulkanPhysicalDevice()
 {
     std::vector<vk::PhysicalDevice> devices = instance.enumeratePhysicalDevices();
     if(devices.size() == 0)
@@ -334,43 +335,41 @@ void PostProcessor::findPhysicalDevice()
         throw std::runtime_error("Could not find a device with Vulkan support");
     }
 
-    for(auto device : devices)
+    for(const auto& device : devices)
     {
-        if(deviceExtensionsFound(device))
+        auto allDeviceExtensionsFound = [](const auto& device){
+            auto device_extension_properties = device.enumerateDeviceExtensionProperties();
+            auto deviceExtensionFound = [&](const auto& extension){
+                for(const auto& prop : device_extension_properties)
+                {
+                    if(strcmp(prop.extensionName, extension) == 0)
+                        return true;
+                }
+
+                return false;
+            };
+
+            for(const auto& extension : required_device_extensions)
+            {
+                if (!deviceExtensionFound(extension))
+                    return false;
+            }
+
+            return true;
+        };
+
+        if(allDeviceExtensionsFound(device))
         {
             physical_device = device;
-            break;
+            return;
         }
     }
 }
 
-bool PostProcessor::deviceExtensionsFound(vk::PhysicalDevice device)
+void PostProcessor::createVulkanDevice()
 {
-    bool found_all = true;
-    std::vector<vk::ExtensionProperties> available_extensions = device.enumerateDeviceExtensionProperties();
-    for(auto extension : required_device_extensions)
-    {
-        bool found = false;
-        for(auto e : available_extensions)
-        {
-            if(strcmp(e.extensionName, extension) == 0)
-            {
-                found = true;
-                break;
-            }
-        }
-        if(!found)
-        {
-            found_all = false;
-            break;
-        }
-    }
+    findVulkanPhysicalDevice();
 
-    return found_all;
-}
-
-void PostProcessor::createDevice()
-{
     float priority = 1.0;
     queue_family_index = getComputeQueueFamilyIndex();
 
@@ -568,6 +567,7 @@ void PostProcessor::copyBuffer(vk::Buffer src, vk::Buffer dst, vk::DeviceSize si
 
     cmdbuf.begin(begin_info);
 
+    //cmdbuf.transition
     vk::BufferCopy copy_region(0, 0, size);
     cmdbuf.copyBuffer(src, dst, 1, &copy_region);
 
