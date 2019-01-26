@@ -105,7 +105,6 @@ private:
 
     void saveGLImage(vk::DeviceMemory memory, uint64_t size);
 
-    void copyBuffer(vk::Buffer src, vk::Buffer dst, vk::DeviceSize size);
     void copyImage(vk::Image src, vk::Image dst);
 
     void setImageLayout(vk::CommandBuffer cmdbuffer, vk::Image image, vk::ImageAspectFlagBits aspect_mask, vk::ImageLayout old_layout, vk::ImageLayout new_layout);

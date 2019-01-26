@@ -11,6 +11,7 @@ FIND_PACKAGE( GLEW REQUIRED )
 FIND_PACKAGE( OpenGL REQUIRED )
 FIND_PACKAGE( Freetype REQUIRED )
 FIND_PACKAGE( Vulkan )
+# This is where I'd add a renderdoc package, if I knew how.
 
 SET( CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib )
 SET( CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib )
@@ -21,6 +22,7 @@ INCLUDE_DIRECTORIES( ${GLFW3_INCLUDE_DIR}
                      ${OPENGL_INCLUDE_DIRS} 
                      ${FREETYPE_INCLUDE_DIRS}
                      ${Vulkan_INCLUDE_DIR}
+                     # /home/cheng/Downloads/renderdoc_1.2/include
                      ./include )
 
 SET( LIBS 
@@ -31,6 +33,8 @@ SET( LIBS
         ${OPENGL_LIBRARIES}
         ${FREETYPE_LIBRARIES}
         ${Vulkan_LIBRARY}
+        # dl
+        # /home/cheng/Downloads/renderdoc_1.2/lib/librenderdoc.so
         ${CMAKE_THREAD_LIBS_INIT} )
 
 SET( PROJECT_ROOT ${CMAKE_SOURCE_DIR} )

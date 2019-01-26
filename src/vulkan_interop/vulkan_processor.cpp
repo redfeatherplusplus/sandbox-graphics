@@ -98,7 +98,7 @@ GLuint PostProcessor::initGL(uint32_t width, uint32_t height, GLenum format)
 
     gltex = tex;
 
-    // If I don't execute this I get a fully red triangle and some runtime errors.
+    // If I don't execute this I get a fully red triangle and a runtime crash.
     auto setup_transition_command_buffer = [&](){
         vk::CommandBufferAllocateInfo allocate_info(
                 command_pool,
@@ -109,12 +109,23 @@ GLuint PostProcessor::initGL(uint32_t width, uint32_t height, GLenum format)
                 vk::CommandBufferUsageFlagBits{});
                 
         transition_command_buffer.begin(begin_info);
+
+        // Transition image to
+        // transition_command_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
+        // transition_command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, 
+        //                                              pipeline_layout, 
+        //                                              0, 1, &descriptor_set, 0, nullptr);
+        // transition_command_buffer.dispatch((uint32_t)ceil(STUPID_WIDTH/float(WORKGROUP_SIZE)), 
+        //                                    (uint32_t)ceil(STUPID_HEIGHT/float(WORKGROUP_SIZE)), 1);
+        
+        // Run our spirv compute shada (See mandelbrot.comp for source, turns red pixels green) 
         transition_command_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
         transition_command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, 
                                                      pipeline_layout, 
                                                      0, 1, &descriptor_set, 0, nullptr);
         transition_command_buffer.dispatch((uint32_t)ceil(STUPID_WIDTH/float(WORKGROUP_SIZE)), 
                                            (uint32_t)ceil(STUPID_HEIGHT/float(WORKGROUP_SIZE)), 1);
+        
         transition_command_buffer.end();
     };
     setup_transition_command_buffer();
@@ -443,6 +454,7 @@ void PostProcessor::createDescriptorSet()
 
 void PostProcessor::createComputePipeline()
 {
+    // This makes it green.
     uint32_t filelength;
     uint32_t *code = readFile(filelength, "@CURR_PATH@/shaders/comp.spv");
     vk::ShaderModuleCreateInfo shader_module_create_info(
@@ -552,36 +564,6 @@ void PostProcessor::cleanup()
     device.destroyPipelineLayout(pipeline_layout);
     device.destroy();
     instance.destroy();
-}
-
-void PostProcessor::copyBuffer(vk::Buffer src, vk::Buffer dst, vk::DeviceSize size)
-{
-    vk::CommandBufferAllocateInfo info(
-            command_pool,
-            vk::CommandBufferLevel::ePrimary,
-            1);
-
-    vk::CommandBuffer cmdbuf = device.allocateCommandBuffers(info)[0];
-
-    vk::CommandBufferBeginInfo begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-
-    cmdbuf.begin(begin_info);
-
-    //cmdbuf.transition
-    vk::BufferCopy copy_region(0, 0, size);
-    cmdbuf.copyBuffer(src, dst, 1, &copy_region);
-
-    cmdbuf.end();
-
-    vk::SubmitInfo submit_info(
-            0, nullptr,
-            nullptr,
-            1, &cmdbuf);
-
-    queue.submit(1, &submit_info, nullptr);
-    queue.waitIdle();
-
-    device.freeCommandBuffers(command_pool, 1, &cmdbuf);
 }
 
 void PostProcessor::copyImage(vk::Image src, vk::Image dst)

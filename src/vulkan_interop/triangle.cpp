@@ -1,6 +1,10 @@
 #include "sandbox.h"
 #include "vulkan_processor.h"
 #include <thread>
+// #include "renderdoc.h"
+// #include <dlfcn.h>
+
+// RENDERDOC_API_1_3_0 *rdoc_api = NULL;
 
 float quad_verts[] =
 {
@@ -29,6 +33,17 @@ class triangle : public sandbox
 
     void init()
     {
+        // Since we don't render to screen, by default renderdoc will not capture vulkan.
+        // But we can insert capture points to "fix" this.
+        // See: https://github.com/baldurk/renderdoc/issues/1074
+
+        // if(void *mod = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD))
+        // {
+        //     pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(mod, "RENDERDOC_GetAPI");
+        //     int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_3_0, (void **)&rdoc_api);
+        //     assert(ret == 1);
+        // }
+
         // Triangle
         const GLchar *tri_vs_fname = "@CURR_PATH@/shaders/tri-vert.glsl" ;
         const GLchar *tri_fs_fname = "@CURR_PATH@/shaders/tri-frag.glsl" ;
@@ -84,6 +99,8 @@ class triangle : public sandbox
 
     void render( double time )
     {
+        // if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
+
         static const GLfloat black[] = { 0.0f, 0.0f, 0.0f, 1.0f } ;
         static const GLfloat white[] = { 1.0f, 1.0f, 1.0f, 1.0f } ;
 
@@ -110,6 +127,8 @@ class triangle : public sandbox
         glBindVertexArray( quad_vao ) ;
         glBindTexture( GL_TEXTURE_2D, tex ) ;
         glDrawArrays( GL_TRIANGLES, 0, 6 ) ;
+
+        // if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
     }
 
     void shutdown()
