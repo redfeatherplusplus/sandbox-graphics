@@ -22,7 +22,7 @@ INCLUDE_DIRECTORIES( ${GLFW3_INCLUDE_DIR}
                      ${OPENGL_INCLUDE_DIRS} 
                      ${FREETYPE_INCLUDE_DIRS}
                      ${Vulkan_INCLUDE_DIR}
-                     # /home/cheng/Downloads/renderdoc_1.2/include
+                     /home/cheng/Downloads/renderdoc_1.2/include
                      ./include )
 
 SET( LIBS 
@@ -33,8 +33,8 @@ SET( LIBS
         ${OPENGL_LIBRARIES}
         ${FREETYPE_LIBRARIES}
         ${Vulkan_LIBRARY}
-        # dl
-        # /home/cheng/Downloads/renderdoc_1.2/lib/librenderdoc.so
+        dl
+        /home/cheng/Downloads/renderdoc_1.2/lib/librenderdoc.so
         ${CMAKE_THREAD_LIBS_INIT} )
 
 SET( PROJECT_ROOT ${CMAKE_SOURCE_DIR} )

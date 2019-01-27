@@ -5,6 +5,10 @@
 #include "sb_math.h"
 #include "sandbox.h"
 
+// See: https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
+#define VMA_IMPLEMENTATION
+#include "vk_mem_alloc.h"
+
 using namespace glm;
 
 std::vector<const char*> required_instance_extensions =
@@ -235,43 +239,6 @@ void PostProcessor::execute()
     device.destroyFence(fence);
 }
 
-void PostProcessor::executeCapture()
-{
-    // vk::BufferCreateInfo bufferInfo = {};
-    // bufferInfo.size = size;
-    // bufferInfo.usage = usage;
-    // bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    //vk::Buffer staging_buffer();
-
-    vk::ImageCreateInfo image_create_info(
-            vk::ImageCreateFlags(),
-            vk::ImageType::e2D,
-            vk::Format::eR8G8B8A8Unorm,
-            {STUPID_WIDTH, STUPID_HEIGHT, 1},
-            1,
-            1,
-            vk::SampleCountFlagBits::e1,
-            vk::ImageTiling::eLinear,
-            vk::ImageUsageFlagBits::eTransferDst);
-    
-    vk::Image staging_image = device.createImage(image_create_info);
-
-    vk::MemoryRequirements mem_reqs = device.getImageMemoryRequirements(staging_image);
-    vk::MemoryAllocateInfo mem_info;
-    mem_info.allocationSize = mem_reqs.size;
-    mem_info.memoryTypeIndex = findMemoryType(mem_reqs.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-    vk::DeviceMemory memory = device.allocateMemory(mem_info);
-    device.bindImageMemory(staging_image, memory, 0);
-
-    copyImage(shared_image, staging_image);
-
-    saveGLImage(memory, mem_reqs.size);
-
-    device.freeMemory(memory);
-    device.destroyImage(staging_image);
-}
-
 void PostProcessor::createVulkanInstance()
 {
     // Enable Validation Layers
@@ -294,7 +261,6 @@ void PostProcessor::createVulkanInstance()
         throw std::runtime_error("Layer VK_LAYER_LUNARG_standard_validation not supported");
     }
     enabled_layers.push_back("VK_LAYER_LUNARG_standard_validation");
-
 
     auto allInstanceExtensionsFound = [&](){
         auto instance_extension_properties = vk::enumerateInstanceExtensionProperties();
@@ -324,10 +290,10 @@ void PostProcessor::createVulkanInstance()
 
     vk::ApplicationInfo application_info(
             "VulkanGlInterop",
-            VK_MAKE_VERSION(1, 0, 0),
+            VK_MAKE_VERSION(1, 1, 73),
             "TestEngine",
-            VK_MAKE_VERSION(0, 0, 0),
-            VK_API_VERSION_1_0);
+            VK_MAKE_VERSION(1, 1, 73),
+            VK_MAKE_VERSION(1, 1, 73));
 
     vk::InstanceCreateInfo create_info(
             vk::InstanceCreateFlags(),
@@ -564,70 +530,6 @@ void PostProcessor::cleanup()
     device.destroyPipelineLayout(pipeline_layout);
     device.destroy();
     instance.destroy();
-}
-
-void PostProcessor::copyImage(vk::Image src, vk::Image dst)
-{
-    vk::FormatProperties format_properties = physical_device.getFormatProperties(vk::Format::eR8G8B8A8Unorm);
-    bool supports_blit = (bool)(format_properties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eBlitSrc);
-    format_properties = physical_device.getFormatProperties(vk::Format::eR8G8B8A8Unorm);
-    supports_blit &= (bool)(format_properties.linearTilingFeatures & vk::FormatFeatureFlagBits::eBlitDst);
-
-    vk::CommandBufferAllocateInfo info(
-            command_pool,
-            vk::CommandBufferLevel::ePrimary,
-            1);
-
-    vk::CommandBuffer cmdbuf = device.allocateCommandBuffers(info)[0];
-    cmdbuf.begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-
-    setImageLayout(cmdbuf, dst, vk::ImageAspectFlagBits::eColor, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-    setImageLayout(cmdbuf, src, vk::ImageAspectFlagBits::eColor, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferSrcOptimal);
-
-    if(supports_blit)
-    {
-        vk::Offset3D blit_size(STUPID_WIDTH, STUPID_HEIGHT, 1);
-        vk::ImageBlit blit_region;
-        blit_region.srcSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
-        blit_region.srcSubresource.layerCount = 1;
-        blit_region.srcOffsets[1] = blit_size;
-        blit_region.dstSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
-        blit_region.dstSubresource.layerCount = 1;
-        blit_region.dstOffsets[1] = blit_size;
-
-        // Issue the blit command
-        cmdbuf.blitImage(src, vk::ImageLayout::eTransferSrcOptimal, dst, vk::ImageLayout::eTransferDstOptimal, blit_region, vk::Filter::eNearest);
-    }
-    else
-    {
-        vk::ImageCopy copy_region{};
-        copy_region.srcSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
-        copy_region.srcSubresource.layerCount = 1;
-        copy_region.dstSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
-        copy_region.dstSubresource.layerCount = 1;
-        copy_region.extent.width = STUPID_WIDTH;
-        copy_region.extent.height = STUPID_HEIGHT;
-        copy_region.extent.depth = 1;
-
-        // Issue the copy command
-        cmdbuf.copyImage(src, vk::ImageLayout::eTransferSrcOptimal, dst, vk::ImageLayout::eTransferDstOptimal, copy_region);
-    }
-
-    setImageLayout(cmdbuf, dst, vk::ImageAspectFlagBits::eColor, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eGeneral);
-    // Transition back the swap chain image after the blit is done
-    setImageLayout(cmdbuf, src, vk::ImageAspectFlagBits::eColor, vk::ImageLayout::eTransferSrcOptimal, vk::ImageLayout::eGeneral);
-
-    cmdbuf.end();
-
-    vk::SubmitInfo submit_info(
-            0, nullptr,
-            nullptr,
-            1, &cmdbuf);
-
-    queue.submit(1, &submit_info, nullptr);
-    queue.waitIdle();
-
-    device.freeCommandBuffers(command_pool, 1, &cmdbuf);
 }
 
 void PostProcessor::setImageLayout(vk::CommandBuffer cmdbuffer,

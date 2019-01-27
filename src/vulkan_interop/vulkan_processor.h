@@ -75,7 +75,6 @@ public:
     void glFinished();
     void glWait();
     void execute();
-    void executeCapture();
 
     void cleanup();
 private:
@@ -104,8 +103,6 @@ private:
     // Other stuff
 
     void saveGLImage(vk::DeviceMemory memory, uint64_t size);
-
-    void copyImage(vk::Image src, vk::Image dst);
 
     void setImageLayout(vk::CommandBuffer cmdbuffer, vk::Image image, vk::ImageAspectFlagBits aspect_mask, vk::ImageLayout old_layout, vk::ImageLayout new_layout);
 
